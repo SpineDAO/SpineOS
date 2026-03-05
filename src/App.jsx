@@ -1,4 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useAuth } from './lib/AuthContext'
+import { isSupabaseConfigured } from './lib/supabase'
+import { fetchCases, upsertCase, insertCases, fetchTrainingSignals, insertTrainingSignal } from './lib/database'
+import AuthScreen from './components/AuthScreen'
 import AICodeEngine from './components/AICodeEngine'
 import DocumentAI from './components/DocumentAI'
 import ProductivityHub from './components/ProductivityHub'
@@ -59,6 +63,7 @@ function AnimatedCounter({ value, prefix = '', suffix = '', decimals = 0 }) {
 export { AnimatedCounter }
 
 export default function App() {
+  const { user, loading: authLoading, signOut } = useAuth()
   const [activeModule, setActiveModule] = useState('dashboard')
   const [role, setRole] = useState('surgeon') // 'surgeon' | 'billing'
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -80,16 +85,40 @@ export default function App() {
     } catch { return [] }
   })
 
-  // Initialize cases from seed data
+  // Load data from Supabase when user logs in
   useEffect(() => {
-    if (!cases) {
+    if (!user || !isSupabaseConfigured()) return
+    let cancelled = false
+    async function load() {
+      const [dbCases, dbSignals] = await Promise.all([
+        fetchCases(user.id),
+        fetchTrainingSignals(user.id),
+      ])
+      if (cancelled) return
+      if (dbCases && dbCases.length > 0) {
+        setCases(dbCases)
+      } else if (!cases) {
+        // First-time user: seed from default data and persist to Supabase
+        const mod = await import('./data/seedData.js')
+        setCases(mod.sampleCases)
+        insertCases(user.id, mod.sampleCases)
+      }
+      if (dbSignals.length > 0) setTrainingSignals(dbSignals)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [user])
+
+  // Initialize cases from seed data (offline / no Supabase fallback)
+  useEffect(() => {
+    if (!cases && !isSupabaseConfigured()) {
       import('./data/seedData.js').then(mod => {
         setCases(mod.sampleCases)
       })
     }
   }, [cases])
 
-  // Persist to window.storage
+  // Persist to window.storage (local fallback, always works)
   useEffect(() => {
     if (cases && window.storage?.setItem) {
       window.storage.setItem('spineos_cases', JSON.stringify(cases))
@@ -103,12 +132,27 @@ export default function App() {
   }, [trainingSignals])
 
   const addTrainingSignal = useCallback((signal) => {
-    setTrainingSignals(prev => [...prev, { ...signal, timestamp: new Date().toISOString() }])
-  }, [])
+    const enriched = { ...signal, timestamp: new Date().toISOString() }
+    setTrainingSignals(prev => [...prev, enriched])
+    if (user && isSupabaseConfigured()) insertTrainingSignal(user.id, enriched)
+  }, [user])
 
   const addCase = useCallback((newCase) => {
     setCases(prev => [...(prev || []), newCase])
-  }, [])
+    if (user && isSupabaseConfigured()) upsertCase(user.id, newCase)
+  }, [user])
+
+  // Auth gate: show login screen if Supabase is configured but user isn't logged in
+  if (isSupabaseConfigured()) {
+    if (authLoading) {
+      return (
+        <div className="min-h-screen bg-spine-bg flex items-center justify-center">
+          <div className="text-spine-muted text-sm">Loading...</div>
+        </div>
+      )
+    }
+    if (!user) return <AuthScreen />
+  }
 
   const renderModule = () => {
     const commonProps = { cases: cases || [], addCase, addTrainingSignal, trainingSignals, apiKey, role }
@@ -188,6 +232,11 @@ export default function App() {
 
         {/* Bottom Section */}
         <div className="border-t border-spine-border p-3">
+          {!sidebarCollapsed && user && (
+            <div className="px-3 py-2 mb-1">
+              <p className="text-[10px] text-spine-muted truncate">{user.email}</p>
+            </div>
+          )}
           {!sidebarCollapsed && (
             <button
               onClick={() => setShowApiKeyModal(true)}
@@ -198,6 +247,17 @@ export default function App() {
               </svg>
               {apiKey ? 'API Key Set' : 'Set API Key'}
               {apiKey && <span className="w-2 h-2 bg-spine-green rounded-full ml-auto"/>}
+            </button>
+          )}
+          {!sidebarCollapsed && user && (
+            <button
+              onClick={() => signOut()}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-spine-muted hover:text-red-400 rounded-lg hover:bg-spine-card transition-all"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+              Sign Out
             </button>
           )}
           <button
