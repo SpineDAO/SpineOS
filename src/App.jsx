@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useAuth } from './lib/AuthContext'
 import { isSupabaseConfigured } from './lib/supabase'
 import { fetchCases, upsertCase, insertCases, fetchTrainingSignals, insertTrainingSignal } from './lib/database'
+import { api } from './lib/api'
 import AuthScreen from './components/AuthScreen'
 import AICodeEngine from './components/AICodeEngine'
 import DocumentAI from './components/DocumentAI'
@@ -65,7 +66,7 @@ export { AnimatedCounter }
 export default function App() {
   const { user, loading: authLoading, signOut } = useAuth()
   const [activeModule, setActiveModule] = useState('dashboard')
-  const [role, setRole] = useState('surgeon') // 'surgeon' | 'billing'
+  const [role, setRole] = useState('surgeon') // 'surgeon' | 'biller' — fetched from server on login
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [apiKey, setApiKey] = useState('')
   const [showApiKeyModal, setShowApiKeyModal] = useState(false)
@@ -84,6 +85,18 @@ export default function App() {
       return stored ? JSON.parse(stored) : []
     } catch { return [] }
   })
+
+  // Fetch user role from backend on login
+  useEffect(() => {
+    if (!user) return
+    api.getMe().then(data => {
+      if (data.user?.role) setRole(data.user.role === 'biller' ? 'billing' : data.user.role)
+    }).catch(() => {
+      // Backend not available, keep default role
+    })
+    // Also ensure profile exists on backend
+    api.setupProfile().catch(() => {})
+  }, [user])
 
   // Load data from Supabase when user logs in
   useEffect(() => {

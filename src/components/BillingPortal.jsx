@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useCallback } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { cptCodes, payerProfiles, denialScenarios, modifierRules } from '../data/seedData'
+import { api } from '../lib/api'
 
 const COLORS = ['#00c2ff', '#f0b429', '#10b981', '#ef4444', '#8b5cf6']
 
@@ -8,6 +9,37 @@ export default function BillingPortal({ cases, addTrainingSignal, setActiveModul
   const [activeTab, setActiveTab] = useState('audit-queue')
   const [selectedCase, setSelectedCase] = useState(null)
   const [batchFile, setBatchFile] = useState(null)
+  const [reviewLoading, setReviewLoading] = useState(null)
+  const [rejectModal, setRejectModal] = useState(null)
+  const [rejectReason, setRejectReason] = useState('')
+
+  const handleApprove = useCallback(async (caseItem) => {
+    setReviewLoading(caseItem.id)
+    try {
+      await api.approveCase(caseItem.id, '')
+      addTrainingSignal({ type: 'accept', codes: caseItem.cptCodes, source: 'billing-review' })
+    } catch (e) {
+      console.error('Approve failed:', e)
+      // Offline fallback: update local state
+      addTrainingSignal({ type: 'accept', codes: caseItem.cptCodes, source: 'billing-review-offline' })
+    }
+    setReviewLoading(null)
+  }, [addTrainingSignal])
+
+  const handleReject = useCallback(async (caseItem) => {
+    if (!rejectReason.trim()) return
+    setReviewLoading(caseItem.id)
+    try {
+      await api.rejectCase(caseItem.id, rejectReason)
+      addTrainingSignal({ type: 'reject', caseId: caseItem.id, reason: rejectReason, source: 'billing-review' })
+    } catch (e) {
+      console.error('Reject failed:', e)
+      addTrainingSignal({ type: 'reject', caseId: caseItem.id, reason: rejectReason, source: 'billing-review-offline' })
+    }
+    setRejectModal(null)
+    setRejectReason('')
+    setReviewLoading(null)
+  }, [rejectReason, addTrainingSignal])
 
   const pendingCases = useMemo(() => cases.filter(c => c.status === 'pending_review'), [cases])
   const finalizedCases = useMemo(() => cases.filter(c => c.status === 'finalized'), [cases])
@@ -106,13 +138,23 @@ export default function BillingPortal({ cases, addTrainingSignal, setActiveModul
                         <p className="text-[10px] text-spine-muted">{c.payer}</p>
                       </div>
                       <div className="flex gap-1">
-                        <button className="px-3 py-1.5 text-[10px] bg-spine-green/20 text-spine-green rounded-lg hover:bg-spine-green/30">
-                          Approve
+                        <button
+                          onClick={() => handleApprove(c)}
+                          disabled={reviewLoading === c.id}
+                          className="px-3 py-1.5 text-[10px] bg-spine-green/20 text-spine-green rounded-lg hover:bg-spine-green/30 disabled:opacity-40"
+                        >
+                          {reviewLoading === c.id ? 'Saving...' : 'Approve'}
                         </button>
-                        <button className="px-3 py-1.5 text-[10px] bg-spine-gold/20 text-spine-gold rounded-lg hover:bg-spine-gold/30">
+                        <button
+                          onClick={() => setActiveModule('ai-code-engine')}
+                          className="px-3 py-1.5 text-[10px] bg-spine-gold/20 text-spine-gold rounded-lg hover:bg-spine-gold/30"
+                        >
                           Edit
                         </button>
-                        <button className="px-3 py-1.5 text-[10px] bg-spine-red/20 text-spine-red rounded-lg hover:bg-spine-red/30">
+                        <button
+                          onClick={() => { setRejectModal(c); setRejectReason('') }}
+                          className="px-3 py-1.5 text-[10px] bg-spine-red/20 text-spine-red rounded-lg hover:bg-spine-red/30"
+                        >
                           Reject
                         </button>
                       </div>
@@ -379,6 +421,34 @@ export default function BillingPortal({ cases, addTrainingSignal, setActiveModul
             <button className="mt-3 px-4 py-2 glass-card text-spine-accent text-xs rounded-lg hover:bg-spine-accent/10">
               Upload Contract
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Modal */}
+      {rejectModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setRejectModal(null)}>
+          <div className="glass-card rounded-xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <h3 className="font-serif text-lg font-bold text-white mb-2">Reject Case: {rejectModal.id}</h3>
+            <p className="text-xs text-spine-muted mb-4">{rejectModal.procedure || rejectModal.diagnosis}</p>
+            <textarea
+              value={rejectReason}
+              onChange={e => setRejectReason(e.target.value)}
+              placeholder="Enter reason for rejection (required)..."
+              className="w-full h-24 bg-spine-bg border border-spine-border rounded-lg p-3 text-sm text-spine-text placeholder-spine-muted/40 focus:outline-none focus:border-spine-accent resize-none"
+            />
+            <div className="flex gap-3 mt-4">
+              <button onClick={() => setRejectModal(null)} className="flex-1 py-2 text-sm text-spine-muted border border-spine-border rounded-lg hover:bg-spine-card">
+                Cancel
+              </button>
+              <button
+                onClick={() => handleReject(rejectModal)}
+                disabled={!rejectReason.trim() || reviewLoading}
+                className="flex-1 py-2 text-sm text-white bg-spine-red/80 rounded-lg hover:bg-spine-red disabled:opacity-40"
+              >
+                {reviewLoading ? 'Rejecting...' : 'Reject Case'}
+              </button>
+            </div>
           </div>
         </div>
       )}

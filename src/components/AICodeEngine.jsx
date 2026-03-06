@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react'
 import { cptCodes, icd10Codes, payerProfiles, modifierRules } from '../data/seedData'
+import { api } from '../lib/api'
 
 const SYSTEM_PROMPT = `You are SpineOS AI Code Engine, the world's most advanced spine surgery coding assistant. Given an operative note or procedure description, you must:
 
@@ -86,108 +87,34 @@ EBL: 25cc. No complications.`
   const analyzeWithAI = useCallback(async () => {
     if (!inputText.trim()) return
 
-    if (!apiKey) {
-      // Use local analysis
-      setLoading(true)
-      setError(null)
-      try {
-        await new Promise(r => setTimeout(r, 1500))
-        const result = localAnalysis(inputText, selectedPayer)
-        setResult(result)
-      } catch (e) {
-        setError('Analysis failed. Please try again.')
-      }
-      setLoading(false)
-      return
-    }
-
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 4096,
-          system: SYSTEM_PROMPT,
-          messages: [{
-            role: 'user',
-            content: `Analyze this operative note and provide CPT/ICD-10 coding recommendations. The patient's payer is ${payerProfiles.find(p => p.id === selectedPayer)?.name || 'Medicare'}.\n\nOperative Note:\n${inputText}`
-          }]
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`)
-      }
-
-      const data = await response.json()
-      const text = data.content[0].text
-      // Extract JSON from response
-      const jsonMatch = text.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0])
-        setResult(parsed)
-      } else {
-        throw new Error('Could not parse AI response')
-      }
+      const payerName = payerProfiles.find(p => p.id === selectedPayer)?.name || 'Medicare'
+      const data = await api.analyzeOpNote(inputText, payerName)
+      setResult(data.result)
     } catch (e) {
       console.error(e)
-      // Fallback to local analysis
+      // Fallback to local analysis if backend is unavailable
       const result = localAnalysis(inputText, selectedPayer)
       setResult(result)
-      setError('Using local analysis engine (AI API unavailable)')
+      setError('Using local analysis engine (backend unavailable: ' + e.message + ')')
     }
     setLoading(false)
-  }, [inputText, apiKey, selectedPayer])
+  }, [inputText, selectedPayer])
 
   const generateAppeal = useCallback(async (code, denialReason) => {
     setAppealLoading(true)
-    if (apiKey) {
-      try {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true',
-          },
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 2048,
-            messages: [{
-              role: 'user',
-              content: `You are a spine surgery medical billing expert. Draft a medical necessity appeal letter for the following denial:
-
-CPT Code: ${code.code} - ${code.description || cptCodes.find(c => c.code === code.code)?.description}
-Denial Reason: ${denialReason}
-Payer: ${payerProfiles.find(p => p.id === selectedPayer)?.name}
-
-Operative Note Context:
-${inputText.substring(0, 1500)}
-
-Write a persuasive, clinically detailed appeal letter that addresses the specific denial reason with medical evidence and coding guidelines. Include relevant LCD/NCD references if applicable.`
-            }]
-          })
-        })
-        const data = await response.json()
-        setAppealLetter(data.content[0].text)
-      } catch {
-        setAppealLetter(generateLocalAppeal(code, denialReason))
-      }
-    } else {
-      await new Promise(r => setTimeout(r, 1000))
+    try {
+      const payerName = payerProfiles.find(p => p.id === selectedPayer)?.name || 'Medicare'
+      const codeDesc = code.description || cptCodes.find(c => c.code === code.code)?.description
+      const data = await api.generateAppeal(code.code, codeDesc, denialReason, payerName, inputText.substring(0, 1500))
+      setAppealLetter(data.letter)
+    } catch {
       setAppealLetter(generateLocalAppeal(code, denialReason))
     }
     setAppealLoading(false)
-  }, [apiKey, selectedPayer, inputText])
+  }, [selectedPayer, inputText])
 
   const handleAcceptResult = useCallback(() => {
     if (!result) return
