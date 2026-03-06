@@ -1,6 +1,8 @@
 import { Router } from 'express'
 import { requireAuth, requireRole } from '../middleware/auth.js'
 import { supabaseAdmin } from '../lib/supabase.js'
+import { encrypt, decrypt } from '../lib/encryption.js'
+import { hashValue, sanitizeInput } from '../lib/phi-scrubber.js'
 
 export const casesRouter = Router()
 
@@ -44,6 +46,8 @@ casesRouter.get('/:id', requireAuth, async (req, res) => {
     .single()
 
   if (error) return res.status(404).json({ error: 'Case not found' })
+  // Decrypt op note for authorized reader
+  if (data.op_note_text) data.op_note_text = decrypt(data.op_note_text)
   res.json({ case: data })
 })
 
@@ -63,9 +67,9 @@ casesRouter.post('/', requireAuth, async (req, res) => {
   const caseData = {
     submitted_by: req.user.id,
     practice_id: req.user.practiceId,
-    op_note_text: opNoteText,
+    op_note_text: encrypt(sanitizeInput(opNoteText, 50000)),
     procedure_date: procedureDate || new Date().toISOString().split('T')[0],
-    patient_id_hash: patientId || null,
+    patient_id_hash: hashValue(patientId) || null,
     diagnosis: diagnosis || '',
     levels: levels || [],
     approach: approach || '',
@@ -111,7 +115,12 @@ casesRouter.patch('/:id', requireAuth, async (req, res) => {
   ]
   const updates = {}
   for (const field of allowedFields) {
-    if (req.body[field] !== undefined) updates[field] = req.body[field]
+    if (req.body[field] !== undefined) {
+      // Encrypt op note text on update
+      updates[field] = field === 'op_note_text'
+        ? encrypt(sanitizeInput(req.body[field], 50000))
+        : req.body[field]
+    }
   }
   updates.updated_at = new Date().toISOString()
 

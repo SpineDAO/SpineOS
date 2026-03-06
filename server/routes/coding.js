@@ -51,11 +51,11 @@ codingRouter.post('/analyze', requireAuth, async (req, res) => {
 
     res.json({ result })
   } catch (err) {
-    console.error('Coding analysis error:', err)
+    console.error('Coding analysis error:', err.message)
     if (err.message === 'ANTHROPIC_API_KEY not set') {
       return res.status(503).json({ error: 'AI engine not configured. Set ANTHROPIC_API_KEY.' })
     }
-    res.status(500).json({ error: 'Analysis failed: ' + err.message })
+    res.status(500).json({ error: 'Analysis failed. Please try again.' })
   }
 })
 
@@ -77,8 +77,8 @@ codingRouter.post('/appeal', requireAuth, async (req, res) => {
     )
     res.json({ letter })
   } catch (err) {
-    console.error('Appeal generation error:', err)
-    res.status(500).json({ error: 'Appeal generation failed: ' + err.message })
+    console.error('Appeal generation error:', err.message)
+    res.status(500).json({ error: 'Appeal generation failed. Please try again.' })
   }
 })
 
