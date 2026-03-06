@@ -4,7 +4,7 @@ import { cptCodes, denialScenarios } from '../data/seedData'
 
 const COLORS = ['#00c2ff', '#f0b429', '#10b981', '#ef4444', '#8b5cf6']
 
-export default function SurgeonPortal({ cases, addCase, addTrainingSignal, apiKey, setActiveModule }) {
+export default function SurgeonPortal({ cases, addCase, addTrainingSignal, setActiveModule }) {
   const [dictationMode, setDictationMode] = useState(false)
   const [dictationText, setDictationText] = useState('')
   const [quickEntryText, setQuickEntryText] = useState('')

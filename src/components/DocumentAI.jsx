@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react'
 import { cptCodes } from '../data/seedData'
 
-export default function DocumentAI({ apiKey, addCase, addTrainingSignal, cases }) {
+export default function DocumentAI({ addCase, addTrainingSignal, cases }) {
   const [uploads, setUploads] = useState([])
   const [processing, setProcessing] = useState(false)
   const [selectedDoc, setSelectedDoc] = useState(null)

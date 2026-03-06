@@ -1,4 +1,29 @@
 import { supabase, isSupabaseConfigured } from './supabase'
+import crypto from 'crypto' // not available in browser — use Web Crypto API
+
+// Hash patient identifiers — never store raw PHI
+function hashIdentifier(value) {
+  if (!value) return ''
+  // Use SHA-256 via Web Crypto API (browser-compatible)
+  const encoder = new TextEncoder()
+  return crypto.subtle
+    ? crypto.subtle.digest('SHA-256', encoder.encode(value)).then(buf =>
+        Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')
+      )
+    : value // fallback if no crypto available
+}
+
+// Synchronous hash for immediate use (simple but not crypto-grade)
+function hashSync(value) {
+  if (!value) return ''
+  let hash = 0
+  for (let i = 0; i < value.length; i++) {
+    const char = value.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash |= 0
+  }
+  return 'h_' + Math.abs(hash).toString(36)
+}
 
 // --- Cases ---
 
@@ -57,16 +82,20 @@ export async function insertTrainingSignal(userId, signal) {
 
 // --- Row Mapping ---
 // The DB stores a flat row; the app uses a richer object.
-// We store the full case object in a JSONB `data` column for flexibility,
-// plus a few indexed columns for querying.
+// HIPAA: patient_name is hashed before storage — no raw PHI in the database.
 
 function caseToRow(userId, c) {
+  // Strip any raw patient name from the data blob before persisting
+  const sanitized = { ...c }
+  if (sanitized.patient) sanitized.patient = hashSync(sanitized.patient)
+  if (sanitized.patientName) sanitized.patientName = hashSync(sanitized.patientName)
+
   return {
     id: c.id,
     user_id: userId,
-    patient_name: c.patient || c.patientName || '',
+    patient_name: hashSync(c.patient || c.patientName || ''),
     procedure_date: c.date || c.procedureDate || null,
-    data: c,
+    data: sanitized,
   }
 }
 

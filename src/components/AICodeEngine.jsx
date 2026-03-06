@@ -2,30 +2,7 @@ import React, { useState, useCallback } from 'react'
 import { cptCodes, icd10Codes, payerProfiles, modifierRules } from '../data/seedData'
 import { api } from '../lib/api'
 
-const SYSTEM_PROMPT = `You are SpineOS AI Code Engine, the world's most advanced spine surgery coding assistant. Given an operative note or procedure description, you must:
-
-1. Identify: procedure type, spinal levels, approach (anterior/posterior/lateral/combined), instrumentation, graft type, decompression extent, add-on procedures
-2. Output a JSON object with this exact structure:
-{
-  "procedureSummary": "brief summary",
-  "levels": ["C5-C6", "C6-C7"],
-  "approach": "anterior|posterior|lateral|combined",
-  "primaryCodes": [{"code": "22551", "description": "...", "wRVU": 20.98, "modifier": "", "rationale": "..."}],
-  "addOnCodes": [{"code": "22552", "description": "...", "wRVU": 5.54, "modifier": "", "rationale": "..."}],
-  "modifierSuggestions": [{"modifier": "62", "reason": "..."}],
-  "icd10Codes": [{"code": "M47.12", "description": "...", "appropriatenessScore": 95}],
-  "ncciWarnings": ["warning text"],
-  "bundlingConflicts": ["conflict text"],
-  "underCodingRisks": ["risk text - potential revenue loss"],
-  "overCodingRisks": ["risk text - compliance concern"],
-  "totalWRVU": 61.31,
-  "documentationGaps": ["missing element that could support higher complexity codes"],
-  "confidence": 92
-}
-
-Use real CPT codes for spine surgery. Be precise about wRVU values. Flag any NCCI edit pairs. Identify under-coding (missed legitimate codes) and over-coding risks separately.`
-
-export default function AICodeEngine({ apiKey, addTrainingSignal, addCase, cases }) {
+export default function AICodeEngine({ addTrainingSignal, addCase, cases }) {
   const [inputType, setInputType] = useState('text')
   const [inputText, setInputText] = useState('')
   const [selectedPayer, setSelectedPayer] = useState('medicare')
@@ -714,7 +691,7 @@ function localAnalysis(text, payerId) {
     overCodingRisks,
     totalWRVU: Math.round(totalWRVU * 100) / 100,
     documentationGaps,
-    confidence: apiKey ? 0 : 78,
+    confidence: 78,
   }
 }
 

@@ -68,8 +68,6 @@ export default function App() {
   const [activeModule, setActiveModule] = useState('dashboard')
   const [role, setRole] = useState('surgeon') // 'surgeon' | 'biller' — fetched from server on login
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [apiKey, setApiKey] = useState('')
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false)
 
   // Global case state
   const [cases, setCases] = useState(() => {
@@ -168,7 +166,7 @@ export default function App() {
   }
 
   const renderModule = () => {
-    const commonProps = { cases: cases || [], addCase, addTrainingSignal, trainingSignals, apiKey, role }
+    const commonProps = { cases: cases || [], addCase, addTrainingSignal, trainingSignals, role }
     switch (activeModule) {
       case 'dashboard': return <Dashboard {...commonProps} setActiveModule={setActiveModule} />
       case 'ai-code-engine': return <AICodeEngine {...commonProps} />
@@ -250,18 +248,6 @@ export default function App() {
               <p className="text-[10px] text-spine-muted truncate">{user.email}</p>
             </div>
           )}
-          {!sidebarCollapsed && (
-            <button
-              onClick={() => setShowApiKeyModal(true)}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-spine-muted hover:text-spine-accent rounded-lg hover:bg-spine-card transition-all"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
-              </svg>
-              {apiKey ? 'API Key Set' : 'Set API Key'}
-              {apiKey && <span className="w-2 h-2 bg-spine-green rounded-full ml-auto"/>}
-            </button>
-          )}
           {!sidebarCollapsed && user && (
             <button
               onClick={() => signOut()}
@@ -292,30 +278,6 @@ export default function App() {
         </div>
       </main>
 
-      {/* API Key Modal */}
-      {showApiKeyModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setShowApiKeyModal(false)}>
-          <div className="glass-card rounded-xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <h3 className="font-serif text-lg font-bold text-white mb-4">Anthropic API Key</h3>
-            <p className="text-sm text-spine-muted mb-4">Enter your Anthropic API key to enable AI-powered coding recommendations.</p>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={e => setApiKey(e.target.value)}
-              placeholder="sk-ant-..."
-              className="w-full bg-spine-bg border border-spine-border rounded-lg px-4 py-3 text-sm text-spine-text placeholder-spine-muted/50 focus:outline-none focus:border-spine-accent transition-colors"
-            />
-            <div className="flex gap-3 mt-4">
-              <button onClick={() => setShowApiKeyModal(false)} className="flex-1 py-2 text-sm text-spine-muted border border-spine-border rounded-lg hover:bg-spine-card transition-all">
-                Cancel
-              </button>
-              <button onClick={() => setShowApiKeyModal(false)} className="flex-1 py-2 text-sm text-white accent-gradient rounded-lg hover:opacity-90 transition-all">
-                Save Key
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
